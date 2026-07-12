@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: vibecast
+    runtime: node
+    plan: free
+    buildCommand: npm install --no-audit --no-fund
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: FREE_TIER_DAILY
+        value: 3
+      - key: PAID_PRICE_MIN_UNITS
+        value: 5000
+      - key: USDT0_TOKEN_ADDRESS
+        value: 0x779ded0c9e1022225f8e0630b35a9b54be713736
+      - key: X402_NETWORK
+        value: eip155:196
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RECEIVE_ADDRESS
+        sync: false
