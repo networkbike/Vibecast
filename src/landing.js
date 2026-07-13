@@ -82,6 +82,14 @@ export function renderLanding() {
           <button type="submit">Generate thread (no-JS) →</button>
         </form>
       </noscript>
+
+      <!-- Last-resort fallback: direct links. If nothing else works, just TAP ONE OF THESE. -->
+      <div style="margin-top:20px;padding-top:20px;border-top:1px solid #2a2a2a;">
+        <p style="color:#a0a0a0;font-size:13px;margin-bottom:12px;">Or tap a pre-made link (no form needed):</p>
+        <a href="https://vibecast-ptrq.onrender.com/go?url=https://youtu.be/dQw4w9WgXcQ&voice=punchy-founder" style="display:block;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#5b8def;text-decoration:none;margin-bottom:6px;font-size:13px;">🚀 Punchy Founder demo</a>
+        <a href="https://vibecast-ptrq.onrender.com/go?url=https://youtu.be/dQw4w9WgXcQ&voice=storyteller" style="display:block;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#5b8def;text-decoration:none;margin-bottom:6px;font-size:13px;">📖 Storyteller demo</a>
+        <a href="https://vibecast-ptrq.onrender.com/go?url=https://youtu.be/dQw4w9WgXcQ&voice=contrarian-curator" style="display:block;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#5b8def;text-decoration:none;font-size:13px;">🧨 Contrarian demo</a>
+      </div>
     </div>
 
     <div class="pricing">
