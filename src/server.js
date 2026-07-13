@@ -35,6 +35,13 @@ app.get('/health', (_req, res) => {
     service: 'vibecast',
     version: '0.1.0',
     timestamp: new Date().toISOString(),
+    config: {
+      supadataKeySet: !!process.env.SUPADATA_API_KEY,
+      ytApiKeySet: !!process.env.YT_API_KEY,
+      ytProxyUrlSet: !!process.env.YT_PROXY_URL,
+      openaiKeySet: !!process.env.OPENAI_API_KEY,
+      receiveAddressSet: !!process.env.RECEIVE_ADDRESS,
+    },
   });
 });
 
