@@ -1,5 +1,5 @@
-// VibeCast landing page
-// Single-file HTML, no framework, no build step. Rendered inline.
+// VibeCast landing page + no-JS result page
+// Two single-file HTML strings, no framework, no build step.
 
 export function renderLanding() {
   return `<!DOCTYPE html>
@@ -33,7 +33,7 @@ export function renderLanding() {
     .result.show { display: block; }
     .tweet { background: #1a1a1a; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #5b8def; }
     .voice-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .pill { padding: 6px 12px; background: #1a1a1a; border: 1px solid #333; border-radius: 999px; font-size: 13px; cursor: pointer; }
+    .pill { padding: 6px 12px; background: #1a1a1a; border: 1px solid #333; border-radius: 999px; font-size: 13px; cursor: pointer; user-select: none; }
     .pill.active { background: #5b8def; border-color: #5b8def; color: #fff; }
     .footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #2a2a2a; color: #666; font-size: 13px; text-align: center; }
     .footer a { color: #5b8def; text-decoration: none; }
@@ -64,6 +64,24 @@ export function renderLanding() {
       <button id="go" onclick="generate()">Generate thread →</button>
 
       <div class="result" id="result"></div>
+
+      <!-- No-JS fallback: plain HTML form. Works in every browser. -->
+      <noscript>
+        <p style="color:#a0a0a0;font-size:13px;margin-top:16px;">JavaScript is disabled. The button above won't work, but the form below will.</p>
+        <form method="POST" action="/api/thread" style="margin-top:16px;">
+          <label>YouTube URL</label>
+          <input type="text" name="url" placeholder="https://youtu.be/dQw4w9WgXcQ" required />
+          <label>Voice</label>
+          <select name="voice">
+            <option value="punchy-founder">🚀 Punchy Founder</option>
+            <option value="data-narrator">📊 Data Narrator</option>
+            <option value="contrarian-curator">🧨 Contrarian Curator</option>
+            <option value="storyteller">📖 Storyteller</option>
+          </select>
+          <input type="hidden" name="format" value="html" />
+          <button type="submit">Generate thread (no-JS) →</button>
+        </form>
+      </noscript>
     </div>
 
     <div class="pricing">
@@ -158,6 +176,61 @@ export function renderLanding() {
       return div.innerHTML;
     }
   </script>
+</body>
+</html>`;
+}
+
+// No-JS result page — returned when the form posts with format=html
+export function renderResultPage(data) {
+  const escapeHtml = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const tweetsHtml = (data.tweets || [])
+    .map((t, i) => `<div class="tweet"><strong>${i + 1}/</strong> ${escapeHtml(t)}</div>`)
+    .join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeCast — Generated Thread</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: #0a0a0a; color: #f5f5f5; min-height: 100vh; line-height: 1.6; padding: 32px 16px; }
+    .container { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+    h1 .accent { background: linear-gradient(120deg, #ff4ecd, #5b8def); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .meta { color: #a0a0a0; font-size: 14px; margin-bottom: 24px; }
+    .meta a { color: #5b8def; text-decoration: none; }
+    h2 { font-size: 20px; margin-bottom: 16px; margin-top: 24px; }
+    .tweet { background: #1a1a1a; padding: 16px 20px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid #5b8def; font-size: 15px; }
+    .tweet strong { color: #5b8def; margin-right: 6px; }
+    .shorts { background: #1a1a1a; padding: 20px; border-radius: 8px; margin-top: 24px; border: 1px solid #2a2a2a; }
+    .shorts h2 { font-size: 18px; margin-bottom: 12px; color: #ff4ecd; margin-top: 0; }
+    .shorts pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.7; color: #e0e0e0; }
+    .back { display: inline-block; margin-top: 24px; padding: 12px 20px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #5b8def; text-decoration: none; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>VibeCast <span class="accent">🎙️</span></h1>
+    <p class="meta">Voice: ${escapeHtml(data.voice || 'punchy-founder')} · Source: <a href="${escapeHtml(data.meta?.url || '#')}">${escapeHtml(data.meta?.url || '')}</a> · Free calls remaining: ${data.meta?.freeCallsRemaining ?? 'n/a'}</p>
+
+    <h2>5-tweet thread</h2>
+    ${tweetsHtml}
+
+    <div class="shorts">
+      <h2>90-second Shorts script</h2>
+      <pre>${escapeHtml(data.shorts_script || '')}</pre>
+    </div>
+
+    <a class="back" href="/">← Generate another thread</a>
+  </div>
 </body>
 </html>`;
 }
