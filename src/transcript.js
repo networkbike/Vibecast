@@ -179,7 +179,14 @@ export async function fetchTranscript(url) {
         }
         if (transcript && transcript.length >= 50) {
           usedStrategy = 'supadata';
-          videoMeta = await fetchVideoMetadata(videoId);
+          // Try to get metadata, but don't fail the whole request if YouTube blocks us
+          try {
+            const meta = await fetchVideoMetadata(videoId);
+            if (meta) videoMeta = meta;
+          } catch (err) {
+            // ignore — we have a transcript, that's enough
+            console.error('Metadata fetch failed (non-fatal):', err.message);
+          }
         }
       } else {
         const errText = await res.text();
