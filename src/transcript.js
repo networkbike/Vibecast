@@ -148,10 +148,18 @@ export async function fetchTranscript(url) {
         }
         if (data) {
           // Supadata returns either:
-          //   { content: "string", lang: "en" }  -- plain text
-          //   { transcript: [{ text, offset, duration, lang }] }  -- segments
-          //   [{ text, offset, duration, lang }]  -- array
-          if (typeof data.content === 'string') {
+          //   { content: [{ text, offset, duration, lang }], lang: "en" }  -- segments (most common)
+          //   { content: "string", lang: "en" }  -- plain text (less common)
+          //   { transcript: [{ text, ... }] }  -- alternate field name
+          //   [{ text, ... }]  -- raw array
+          if (Array.isArray(data.content)) {
+            transcript = data.content
+              .map(s => (typeof s === 'string' ? s : s.text || ''))
+              .filter(Boolean)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+          } else if (typeof data.content === 'string') {
             transcript = data.content;
           } else if (Array.isArray(data.transcript)) {
             transcript = data.transcript
