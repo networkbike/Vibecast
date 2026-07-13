@@ -14,7 +14,7 @@ function fallbackThread({ url, voice, transcript, videoMeta, transcriptStrategy 
   const title = videoMeta?.title || 'this video';
   const author = videoMeta?.author && videoMeta.author !== 'Unknown channel' ? videoMeta.author : null;
   const description = videoMeta?.description || '';
-  const hasRealTranscript = transcriptStrategy === 'youtube-transcript' || transcriptStrategy === 'timedtext-direct';
+  const hasRealTranscript = transcriptStrategy === 'youtube-transcript' || transcriptStrategy === 'timedtext-direct' || transcriptStrategy === 'supadata';
   const hasApiMetadata = transcriptStrategy === 'youtube-data-api';
 
   // Extract a key claim/phrase from description for tweet hooks
