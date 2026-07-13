@@ -198,7 +198,7 @@ export function renderResultPage(data) {
     .replace(/'/g, '&#39;');
 
   const tweetsHtml = (data.tweets || [])
-    .map((t, i) => `<div class="tweet"><strong>${i + 1}/</strong> ${escapeHtml(t)}</div>`)
+    .map((t, i) => `<div class="tweet"><strong>${i + 1}/</strong> ${escapeHtml(t.replace(/^\d+\/\s*/, ''))}</div>`)
     .join('');
 
   return `<!DOCTYPE html>
