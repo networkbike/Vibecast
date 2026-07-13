@@ -1,13 +1,16 @@
 // YouTube transcript fetcher — hardened against rate-limits
 //
 // Tries multiple strategies in order:
-//   1. youtube-transcript npm package (most reliable, but YouTube throttles IPs)
-//   2. Direct timedtext fetch with rotating User-Agent + cookie strategy
-//   3. Fallback: extract video title from page HTML + use it for context
+//   1. Proxy (YT_PROXY_URL) — routes to a different IP, bypasses Render's block
+//   2. youtube-transcript npm package directly (works on some IPs, not Render)
+//   3. Direct timedtext fetch with rotating User-Agent + cookie strategy
+//   4. Fallback: extract video title from page HTML + use it for context
 //
-// For the hackathon, strategy 1 + 3 is enough. Strategy 2 is for production.
+// For the hackathon, strategy 1 (proxy) is the production path.
 
 import { YoutubeTranscript } from 'youtube-transcript';
+
+const YT_PROXY_URL = process.env.YT_PROXY_URL; // e.g. https://vibecast-yt-proxy.onrender.com
 
 // A small set of realistic User-Agents. Rotating helps avoid per-UA throttles.
 const USER_AGENTS = [
@@ -72,23 +75,46 @@ export async function fetchTranscript(url) {
     author: 'Unknown channel',
   };
 
-  // Strategy 1: youtube-transcript npm
+  // Strategy 1: external proxy (recommended — bypasses Render's rate-limited IP)
   let transcript = '';
   let usedStrategy = null;
   let lastError = null;
 
-  try {
-    const segments = await YoutubeTranscript.fetchTranscript(videoId);
-    transcript = segments.map((s) => s.text).join(' ').replace(/\s+/g, ' ').trim();
-    if (transcript && transcript.length >= 50) {
-      usedStrategy = 'youtube-transcript';
+  if (YT_PROXY_URL) {
+    try {
+      const proxyRes = await fetch(`${YT_PROXY_URL}/transcript?id=${videoId}`, {
+        signal: AbortSignal.timeout(15000),
+      });
+      if (proxyRes.ok) {
+        const proxyData = await proxyRes.json();
+        if (proxyData.transcript && proxyData.transcript.length >= 50) {
+          transcript = proxyData.transcript;
+          usedStrategy = 'proxy';
+        }
+      } else {
+        lastError = new Error(`Proxy returned ${proxyRes.status}`);
+      }
+    } catch (err) {
+      lastError = err;
+      // Continue to strategy 2
     }
-  } catch (err) {
-    lastError = err;
-    // Continue to strategy 2
   }
 
-  // Strategy 2: direct timedtext fetch (rare to work but worth trying)
+  // Strategy 2: youtube-transcript npm (works on some IPs)
+  if (!usedStrategy) {
+    try {
+      const segments = await YoutubeTranscript.fetchTranscript(videoId);
+      transcript = segments.map((s) => s.text).join(' ').replace(/\s+/g, ' ').trim();
+      if (transcript && transcript.length >= 50) {
+        usedStrategy = 'youtube-transcript';
+      }
+    } catch (err) {
+      lastError = err;
+      // Continue to strategy 3
+    }
+  }
+
+  // Strategy 3: direct timedtext fetch (rare to work but worth trying)
   if (!usedStrategy) {
     try {
       const res = await fetch(
@@ -109,7 +135,7 @@ export async function fetchTranscript(url) {
     }
   }
 
-  // Strategy 3: build a meaningful "transcript" from the video metadata.
+  // Strategy 4: build a meaningful "transcript" from the video metadata.
   // The LLM can use this to generate a thread about the video's title/topic.
   if (!usedStrategy) {
     const title = meta.title;
