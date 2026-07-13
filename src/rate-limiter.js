@@ -19,6 +19,8 @@ export function rateLimiter(req, res, next) {
     dailyCalls.set(ip, { date: today, count: 0 });
   }
 
+  // Attach IP for downstream handlers
+  req.clientIp = ip;
   next();
 }
 
