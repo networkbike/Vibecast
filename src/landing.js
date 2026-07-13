@@ -186,27 +186,33 @@ export function renderLanding() {
       font-weight: 700;
       cursor: pointer;
       font-family: inherit;
+      transition: opacity 0.15s, transform 0.05s;
     }
     .demo button:hover { opacity: 0.9; }
+    .demo button:active { transform: scale(0.98); }
     .demo button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .result {
-      margin-top: 24px;
-      padding: 20px;
-      background: #0a0a0a;
-      border: 1px solid #2a2a2a;
+    /* Free-tier badge above button */
+    .free-badge {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: rgba(0, 212, 170, 0.08);
+      border: 1px solid rgba(0, 212, 170, 0.3);
       border-radius: 8px;
-      white-space: pre-wrap;
-      font-size: 14px;
-      display: none;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #00d4aa;
     }
-    .result.show { display: block; }
-    .tweet {
-      background: #1a1a1a;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      border-left: 3px solid #5b8def;
+    .free-badge.warn {
+      background: rgba(255, 78, 205, 0.08);
+      border-color: rgba(255, 78, 205, 0.3);
+      color: #ff4ecd;
     }
+    .free-badge .count {
+      font-weight: 700;
+    }
+    /* Voice pills */
     .voice-pills {
       display: flex;
       flex-wrap: wrap;
@@ -227,6 +233,161 @@ export function renderLanding() {
       border-color: #5b8def;
       color: #fff;
     }
+    /* In-place result block (visible right under the button) */
+    .result {
+      margin-top: 24px;
+      padding: 20px;
+      background: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      display: none;
+    }
+    .result.show { display: block; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .tweet {
+      background: #1a1a1a;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border-left: 3px solid #5b8def;
+    }
+    /* Loading state */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 40px 20px;
+      gap: 16px;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #2a2a2a;
+      border-top-color: #5b8def;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { color: #a0a0a0; font-size: 14px; }
+    .loading-subtext { color: #666; font-size: 12px; }
+    /* Error state */
+    .result-error {
+      background: rgba(255, 78, 205, 0.08);
+      border: 1px solid rgba(255, 78, 205, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+    .result-error .icon { font-size: 32px; margin-bottom: 8px; }
+    .result-error .title { font-weight: 700; margin-bottom: 4px; }
+    .result-error .desc { color: #a0a0a0; font-size: 13px; }
+    /* Modal overlay for big result */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 200;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 32px 16px;
+      overflow-y: auto;
+    }
+    .modal-backdrop.show { display: flex; }
+    .modal {
+      background: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      max-width: 720px;
+      width: 100%;
+      padding: 32px 24px;
+      position: relative;
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #f5f5f5;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-close:hover { background: #2a2a2a; }
+    .modal h2 { font-size: 24px; margin-bottom: 4px; }
+    .modal .sub { color: #a0a0a0; font-size: 14px; margin-bottom: 20px; }
+    .modal .sub a { color: #5b8def; }
+    .modal .tweet { font-size: 15px; line-height: 1.6; }
+    .modal .shorts-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #2a2a2a;
+    }
+    .modal .shorts-section h3 {
+      color: #ff4ecd;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+    .modal .shorts-section pre {
+      background: #1a1a1a;
+      padding: 16px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .modal .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .modal .meta-pill {
+      padding: 4px 10px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 999px;
+      font-size: 11px;
+      color: #a0a0a0;
+    }
+    .modal .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .modal .action-btn {
+      flex: 1;
+      padding: 10px 16px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #f5f5f5;
+      cursor: pointer;
+      font-size: 13px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .modal .action-btn.primary {
+      background: linear-gradient(120deg, #ff4ecd, #5b8def);
+      border: none;
+      color: #fff;
+      font-weight: 700;
+    }
+    .modal .action-btn:hover { background: #2a2a2a; }
+    .modal .action-btn.primary:hover { opacity: 0.9; }
     /* Pricing card */
     .pricing {
       background: #1a1a1a;
@@ -347,13 +508,19 @@ export function renderLanding() {
         <div class="pill" data-voice="storyteller">📖 Storyteller</div>
       </div>
 
-      <button id="go" onclick="generate()">Generate thread →</button>
+      <div class="free-badge" id="freeBadge">
+        <span>🆓 Free tier</span>
+        <span class="count"><span id="freeUsed">0</span>/3 calls used today</span>
+      </div>
 
+      <button id="go">Generate thread →</button>
+
+      <!-- Inline result area (also serves as the loading state and error display) -->
       <div class="result" id="result"></div>
 
       <!-- No-JS fallback: plain HTML form. Works in every browser. -->
       <noscript>
-        <p style="color:#a0a0a0;font-size:13px;margin-top:16px;">JavaScript is disabled. The button above won't work, but the form below will.</p>
+        <p style="color:#a0a0a0;font-size:13px;margin-top:16px;">JavaScript is disabled. The form below works without JS.</p>
         <form method="POST" action="/api/thread" style="margin-top:16px;">
           <label>YouTube URL</label>
           <input type="text" name="url" placeholder="https://youtu.be/dQw4w9WgXcQ" required />
@@ -446,8 +613,20 @@ export function renderLanding() {
     </div>
   </div>
 
+  <!-- Result modal (impossible-to-miss overlay) -->
+  <div class="modal-backdrop" id="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
+      <h2 id="modalTitle">Your 5-tweet thread 🎉</h2>
+      <p class="sub" id="modalSub"></p>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
   <script>
     let selectedVoice = 'punchy-founder';
+    let freeCallsUsed = 0;
+    const FREE_TIER_DAILY = 3;
 
     document.querySelectorAll('.pill').forEach(p => {
       p.addEventListener('click', () => {
@@ -457,21 +636,114 @@ export function renderLanding() {
       });
     });
 
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s == null ? '' : String(s);
+      return div.innerHTML;
+    }
+
+    function updateFreeBadge() {
+      document.getElementById('freeUsed').textContent = freeCallsUsed;
+      const badge = document.getElementById('freeBadge');
+      if (freeCallsUsed >= FREE_TIER_DAILY) {
+        badge.classList.add('warn');
+        badge.innerHTML = '<span>💳 Paid tier</span><span class="count">' + (freeCallsUsed + 1) + ' calls today</span>';
+      }
+    }
+
+    function showLoading() {
+      const r = document.getElementById('result');
+      r.className = 'result show';
+      r.innerHTML = '<div class="loading"><div class="spinner"></div><div class="loading-text">Fetching YouTube transcript…</div><div class="loading-subtext">Generating thread with GPT-4o · usually 10-30 seconds</div></div>';
+      // Auto-scroll the result into view
+      r.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function showError(icon, title, desc) {
+      const r = document.getElementById('result');
+      r.className = 'result show';
+      r.innerHTML = '<div class="result-error"><div class="icon">' + icon + '</div><div class="title">' + escapeHtml(title) + '</div><div class="desc">' + escapeHtml(desc) + '</div></div>';
+      r.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function showModal(data) {
+      const m = document.getElementById('modal');
+      const sub = document.getElementById('modalSub');
+      const content = document.getElementById('modalContent');
+      const v = data.video || {};
+      sub.innerHTML = 'Source: <a href="' + escapeHtml(v.url || data.meta?.url || '#') + '" target="_blank" rel="noopener">' + escapeHtml(v.title || 'YouTube video') + '</a>' + (v.author ? ' · ' + escapeHtml(v.author) : '');
+
+      let html = '';
+      (data.tweets || []).forEach((t, i) => {
+        const clean = String(t).replace(/^\\d+\\/\\s*/, '');
+        html += '<div class="tweet"><strong>' + (i + 1) + '/</strong> ' + escapeHtml(clean) + '</div>';
+      });
+
+      html += '<div class="shorts-section"><h3>📱 90-second Shorts script</h3><pre>' + escapeHtml(data.shorts_script || '') + '</pre></div>';
+
+      html += '<div class="meta-row">';
+      html += '<span class="meta-pill">🎙️ ' + escapeHtml(data.voice || '') + '</span>';
+      html += '<span class="meta-pill">' + (data.source === 'openai' ? '🤖 GPT-4o' : '📝 Template') + '</span>';
+      html += '<span class="meta-pill">' + (data.meta?.paid ? '💳 Paid' : '🆓 Free') + '</span>';
+      html += '<span class="meta-pill">' + (data.meta?.freeCallsUsed || 0) + '/' + FREE_TIER_DAILY + ' free used</span>';
+      html += '</div>';
+
+      html += '<div class="actions">';
+      html += '<button class="action-btn primary" onclick="copyThread(\\'' + escapeHtml(JSON.stringify((data.tweets || []).join('\\n\\n'))) + '\\')">📋 Copy thread</button>';
+      html += '<button class="action-btn" onclick="closeModal()">✕ Close</button>';
+      html += '</div>';
+
+      content.innerHTML = html;
+      m.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+
+    window.closeModal = function() {
+      document.getElementById('modal').classList.remove('show');
+      document.body.style.overflow = '';
+    };
+
+    window.copyThread = function(text) {
+      try {
+        // Unescape the stringified JSON
+        const unescaped = JSON.parse('"' + text.replace(/"/g, '\\\\"') + '"');
+        navigator.clipboard.writeText(unescaped).then(() => {
+          // Visual feedback
+          const btns = document.querySelectorAll('.action-btn.primary');
+          btns.forEach(b => { b.textContent = '✓ Copied!'; setTimeout(() => b.textContent = '📋 Copy thread', 2000); });
+        });
+      } catch (err) {
+        // Fallback: select all text in modal
+        alert('Copy failed. Press Ctrl+C after selecting the tweets.');
+      }
+    };
+
+    document.getElementById('modalClose').addEventListener('click', closeModal);
+    document.getElementById('modal').addEventListener('click', (e) => {
+      if (e.target.id === 'modal') closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    document.getElementById('go').addEventListener('click', generate);
+
     async function generate() {
       const url = document.getElementById('url').value.trim();
       const btn = document.getElementById('go');
-      const result = document.getElementById('result');
 
       if (!url) {
-        result.className = 'result show';
-        result.textContent = '⚠️  Paste a YouTube URL first.';
+        showError('⚠️', 'Missing YouTube URL', 'Paste a YouTube watch or youtu.be link above, then tap Generate.');
+        return;
+      }
+      if (!/^https?:\\/\\/(www\\.)?(youtube\\.com\\/(watch\\?v=|shorts\\/|embed\\/)|youtu\\.be\\/|m\\.youtube\\.com\\/watch\\?v=)/.test(url)) {
+        showError('⚠️', 'Not a YouTube URL', 'That doesn\\'t look like a YouTube link. Try: https://youtu.be/dQw4w9WgXcQ');
         return;
       }
 
       btn.disabled = true;
       btn.textContent = 'Generating…';
-      result.className = 'result show';
-      result.textContent = '⏳  Fetching transcript + generating thread…';
+      showLoading();
 
       try {
         const res = await fetch('/api/thread', {
@@ -481,38 +753,39 @@ export function renderLanding() {
         });
 
         if (res.status === 402) {
+          // Free tier exhausted (or payment failed)
           const challenge = await res.json();
-          result.textContent = '💳  Payment required. This is a paid call.\n\nChallenge:\n' + JSON.stringify(challenge, null, 2);
+          showError(
+            '💳',
+            'Free tier limit reached (3 calls/day)',
+            'This is a paid service. For the hackathon demo, judges verify the onchain listing + x402 manifest at /.well-known/x402. Or just wait until tomorrow for a fresh 3 free calls.'
+          );
+          freeCallsUsed = Math.max(freeCallsUsed, FREE_TIER_DAILY);
+          updateFreeBadge();
           return;
         }
 
         if (!res.ok) {
-          const err = await res.json();
-          result.textContent = '❌  ' + (err.message || err.error || 'Request failed');
+          let msg = 'Request failed';
+          try { const err = await res.json(); msg = err.message || err.error || msg; } catch (_) {}
+          showError('❌', 'Generation failed', msg);
           return;
         }
 
         const data = await res.json();
-        let html = '';
-        data.tweets.forEach((t, i) => {
-          html += '<div class="tweet"><strong>' + (i+1) + '/</strong> ' + escapeHtml(t) + '</div>';
-        });
-        html += '<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #2a2a2a;"><strong>Shorts script:</strong>\n\n' + escapeHtml(data.shorts_script) + '</div>';
-        html += '<div style="margin-top: 12px; color: #666; font-size: 12px;">Voice: ' + data.voice + ' · Free calls used: ' + data.meta.freeCallsUsed + ' · Paid: ' + data.meta.paid + '</div>';
-        result.innerHTML = html;
+        freeCallsUsed = data.meta?.freeCallsUsed || (freeCallsUsed + 1);
+        updateFreeBadge();
+        showModal(data);
       } catch (err) {
-        result.textContent = '❌  ' + err.message;
+        showError('❌', 'Network error', err.message + ' — check your connection and try again.');
       } finally {
         btn.disabled = false;
         btn.textContent = 'Generate thread →';
       }
     }
 
-    function escapeHtml(s) {
-      const div = document.createElement('div');
-      div.textContent = s;
-      return div.innerHTML;
-    }
+    // Expose for debugging
+    window.vibecast = { generate, selectedVoice: () => selectedVoice, freeCallsUsed: () => freeCallsUsed };
   </script>
 </body>
 </html>`;
@@ -520,7 +793,7 @@ export function renderLanding() {
 
 // No-JS result page — returned when the form posts with format=html
 export function renderResultPage(data) {
-  const escapeHtml = (s) => String(s)
+  const escapeHtml = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -528,7 +801,7 @@ export function renderResultPage(data) {
     .replace(/'/g, '&#39;');
 
   const tweetsHtml = (data.tweets || [])
-    .map((t, i) => `<div class="tweet"><strong>${i + 1}/</strong> ${escapeHtml(t.replace(/^\d+\/\s*/, ''))}</div>`)
+    .map((t, i) => `<div class="tweet"><strong>${i + 1}/</strong> ${escapeHtml(String(t).replace(/^\d+\/\s*/, ''))}</div>`)
     .join('');
 
   return `<!DOCTYPE html>
