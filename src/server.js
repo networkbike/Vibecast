@@ -73,6 +73,51 @@ app.get('/', (_req, res) => {
   res.send(renderLanding());
 });
 
+// ───────────────────────────────────────────────────────────────
+// GET /go — direct link fallback. Tap a link, get the result.
+// No JavaScript, no form submit, no interaction needed.
+// Usage: /go?url=<youtube_url>&voice=<voice>
+// ───────────────────────────────────────────────────────────────
+app.get('/go', rateLimiter, async (req, res) => {
+  const { url, voice = 'punchy-founder' } = req.query;
+
+  if (!url) {
+    return res.status(400).send('Missing url parameter. Usage: /go?url=https://youtu.be/VIDEO_ID&voice=punchy-founder');
+  }
+
+  const ytRegex = /^https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/|m\.youtube\.com\/watch\?v=)[\w-]{11}/;
+  if (!ytRegex.test(url)) {
+    return res.status(400).send('Invalid YouTube URL. Pass a watch or youtu.be link.');
+  }
+
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  const freeCallsUsed = await getFreeCallsUsed(ip);
+
+  if (freeCallsUsed >= FREE_TIER_DAILY) {
+    return res.status(402).send('Free tier limit reached (3 calls/day). For unlimited access, use the main form which supports x402 payments.');
+  }
+
+  try {
+    const result = await generateThread({ url, voice });
+    const responseBody = {
+      ...result,
+      meta: {
+        voice,
+        url,
+        paid: false,
+        freeCallsUsed,
+        freeCallsRemaining: Math.max(0, FREE_TIER_DAILY - freeCallsUsed - 1),
+        generatedAt: new Date().toISOString(),
+      },
+    };
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(renderResultPage(responseBody));
+  } catch (err) {
+    console.error('Thread generation failed:', err);
+    return res.status(500).send('Generation failed: ' + (err.message || 'unknown error'));
+  }
+});
+
 // ─────────────────────────────────────────────────────────────
 // POST /api/thread — the actual product
 // Body: { url: string, voice?: string, apiKey?: string }
