@@ -13,7 +13,12 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 function fallbackThread({ url, voice, transcript, videoMeta, transcriptStrategy }) {
   const title = videoMeta?.title || 'this video';
   const author = videoMeta?.author && videoMeta.author !== 'Unknown channel' ? videoMeta.author : null;
+  const description = videoMeta?.description || '';
   const hasRealTranscript = transcriptStrategy === 'youtube-transcript' || transcriptStrategy === 'timedtext-direct';
+  const hasApiMetadata = transcriptStrategy === 'youtube-data-api';
+
+  // Extract a key claim/phrase from description for tweet hooks
+  const descSnippet = description ? description.split(/[.\n]/).filter(s => s.length > 30 && s.length < 200)[0] : null;
 
   let tweets;
   if (hasRealTranscript) {
@@ -24,9 +29,8 @@ function fallbackThread({ url, voice, transcript, videoMeta, transcriptStrategy 
       `4/ If you're building anything around this topic, the takeaway is: don't paraphrase — preserve the original framing.`,
       `5/ Full breakdown + the part everyone skipped 👇\n\n#VibeCast`,
     ];
-  } else {
-    // Metadata-fallback: we couldn't fetch the transcript (rate limit) so
-    // generate a "topic intro" thread that hooks people into watching.
+  } else if (hasApiMetadata && !descSnippet) {
+    // We have title + author but description is too thin for a real hook
     const looksGeneric = !title || title.startsWith('YouTube video');
     const authorTag = author ? ` by ${author}` : '';
     const header = looksGeneric
@@ -34,6 +38,25 @@ function fallbackThread({ url, voice, transcript, videoMeta, transcriptStrategy 
       : `1/ "${title}"${authorTag} is one of those videos people will be quoting all week 🧵`;
     tweets = [
       header,
+      `2/ If you haven't seen it yet, here's why it's worth your time ⤵️`,
+      `3/ The hook is sharper than 90% of content in this space — it earns the watch in the first 30 seconds.`,
+      `4/ The middle is where the real value is. Most threads will skip it. Watch it yourself.`,
+      `5/ Full thread + a 90s Shorts script coming. For now: go watch the video 👇\n\n#VibeCast`,
+    ];
+  } else if (hasApiMetadata && descSnippet) {
+    // We have a real description with content — build a thread that references it
+    const authorTag = author ? ` from @${author.replace(/\s+/g, '')}` : '';
+    tweets = [
+      `1/ "${title}"${authorTag} is the kind of video you wish you'd seen sooner 🧵`,
+      `2/ The premise: ${descSnippet.trim()}`,
+      `3/ Most people will watch the first 2 minutes and bounce. The real value is in the middle.`,
+      `4/ If you've been stuck on this topic, this is the video that finally explains it. Save this thread.`,
+      `5/ Full breakdown + 90s Shorts script below 👇\n\n#VibeCast`,
+    ];
+  } else {
+    // Generic fallback (no metadata at all)
+    tweets = [
+      `1/ Found a video worth your time 🧵`,
       `2/ If you haven't seen it yet, here's why it's worth your time ⤵️`,
       `3/ The hook is sharper than 90% of content in this space — it earns the watch in the first 30 seconds.`,
       `4/ The middle is where the real value is. Most threads will skip it. Watch it yourself.`,
