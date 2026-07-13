@@ -80,29 +80,57 @@ async function fetchYouTubeDataApi(videoId) {
 }
 
 // Legacy metadata fetcher (used by older fallback paths)
+// Tries multiple sources in order: oEmbed, watch page, null
 async function fetchVideoMetadata(videoId) {
+  // Strategy 1: oEmbed (public, no auth, different IP pool)
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data.title) {
+        return {
+          id: videoId,
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          title: data.title,
+          author: data.author_name || 'Unknown channel',
+          thumbnailUrl: data.thumbnail_url,
+        };
+      }
+    }
+  } catch (err) {
+    // fall through
+  }
+
+  // Strategy 2: watch page scraping (may fail on shared IPs)
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
         'User-Agent': pickUA(),
         'Accept-Language': 'en-US,en;q=0.9',
       },
+      signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return null;
-    const html = await res.text();
-
-    const titleMatch = html.match(/<meta\s+name="title"\s+content="([^"]+)"/);
-    const authorMatch = html.match(/"author":"([^"]+)"/);
-
-    return {
-      id: videoId,
-      url: `https://www.youtube.com/watch?v=${videoId}`,
-      title: titleMatch ? titleMatch[1] : `YouTube video ${videoId}`,
-      author: authorMatch ? authorMatch[1] : 'Unknown channel',
-    };
+    if (res.ok) {
+      const html = await res.text();
+      const titleMatch = html.match(/<meta\s+name="title"\s+content="([^"]+)"/);
+      const authorMatch = html.match(/"author":"([^"]+)"/);
+      if (titleMatch) {
+        return {
+          id: videoId,
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          title: titleMatch[1],
+          author: authorMatch ? authorMatch[1] : 'Unknown channel',
+        };
+      }
+    }
   } catch {
-    return null;
+    // fall through
   }
+
+  return null;
 }
 
 export async function fetchTranscript(url) {
