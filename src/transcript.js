@@ -1,20 +1,17 @@
 // YouTube data fetcher — uses the official YouTube Data API v3
 //
-// Strategy 1: YouTube Data API for video metadata (title, description, channel, tags)
-//             1 quota unit per call. Free tier is 10,000 units/day. Bypasses
-//             the public YouTube scraping rate limits because googleapis.com
-//             uses a different IP pool than youtube.com.
-//
-// Strategy 2: youtube-transcript npm package (works on some IPs, fails on shared Render IPs)
-//
-// Strategy 3: Direct timedtext fetch (rare to work)
-//
-// Strategy 4: Metadata fallback (graceful degradation when nothing works)
+// Strategy 1: Supadata API (best — returns full transcript, no rate limits from our IP)
+// Strategy 2: YouTube Data API for video metadata (title, description, channel, tags)
+// Strategy 3: External proxy (legacy)
+// Strategy 4: youtube-transcript npm package
+// Strategy 5: Direct timedtext fetch
+// Strategy 6: Metadata fallback
 
 import { YoutubeTranscript } from 'youtube-transcript';
 
+const SUPADATA_API_KEY = process.env.SUPADATA_API_KEY;
 const YT_API_KEY = process.env.YT_API_KEY;
-const YT_PROXY_URL = process.env.YT_PROXY_URL; // legacy — kept for backward compat
+const YT_PROXY_URL = process.env.YT_PROXY_URL; // legacy
 
 // A small set of realistic User-Agents. Rotating helps avoid per-UA throttles.
 const USER_AGENTS = [
@@ -118,7 +115,43 @@ export async function fetchTranscript(url) {
   let transcript = '';
   let usedStrategy = null;
 
-  // Strategy 1: YouTube Data API (best — reliable, official, no scraping)
+  // Strategy 1: Supadata API (best — handles YouTube scraping on their own IPs)
+  if (SUPADATA_API_KEY) {
+    try {
+      const res = await fetch(
+        `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}`,
+        {
+          headers: { 'x-api-key': SUPADATA_API_KEY },
+          signal: AbortSignal.timeout(15000),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.content) {
+          // Supadata returns either { content: "...", ... } or { transcript: [{text, ...}] }
+          if (typeof data.content === 'string') {
+            transcript = data.content;
+          } else if (Array.isArray(data.transcript)) {
+            transcript = data.transcript.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
+          } else if (Array.isArray(data)) {
+            transcript = data.map(s => s.text || s).join(' ').replace(/\s+/g, ' ').trim();
+          }
+          if (transcript && transcript.length >= 50) {
+            usedStrategy = 'supadata';
+            // Also fetch metadata in parallel
+            videoMeta = await fetchVideoMetadata(videoId);
+          }
+        }
+      } else {
+        const errText = await res.text();
+        console.error('Supadata API error:', res.status, errText.slice(0, 200));
+      }
+    } catch (err) {
+      console.error('Supadata fetch failed:', err.message);
+    }
+  }
+
+  // Strategy 2: YouTube Data API (best — reliable, official, no scraping)
   if (YT_API_KEY) {
     const apiData = await fetchYouTubeDataApi(videoId);
     if (apiData) {
@@ -138,7 +171,7 @@ export async function fetchTranscript(url) {
     }
   }
 
-  // Strategy 2: External proxy (kept for backward compat with the previous deploy)
+  // Strategy 3: External proxy (kept for backward compat with the previous deploy)
   if (!usedStrategy && YT_PROXY_URL) {
     try {
       const proxyRes = await fetch(`${YT_PROXY_URL}/transcript?id=${videoId}`, {
@@ -160,7 +193,7 @@ export async function fetchTranscript(url) {
     }
   }
 
-  // Strategy 3: Direct youtube-transcript npm (may fail on Render's IP)
+  // Strategy 4: Direct youtube-transcript npm (may fail on Render's IP)
   if (!usedStrategy) {
     try {
       const segments = await YoutubeTranscript.fetchTranscript(videoId);
@@ -176,7 +209,7 @@ export async function fetchTranscript(url) {
     }
   }
 
-  // Strategy 4: Direct timedtext fetch
+  // Strategy 5: Direct timedtext fetch
   if (!usedStrategy) {
     try {
       const res = await fetch(
@@ -200,7 +233,7 @@ export async function fetchTranscript(url) {
     }
   }
 
-  // Strategy 5: Final fallback — generic template based on whatever metadata we have
+  // Strategy 6: Final fallback — generic template based on whatever metadata we have
   if (!usedStrategy) {
     if (!videoMeta) {
       videoMeta = {
