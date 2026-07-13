@@ -13,7 +13,7 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import { generateThread } from './thread-generator.js';
-import { rateLimiter, getFreeCallsUsed } from './rate-limiter.js';
+import { rateLimiter, getFreeCallsUsed, incrementFreeCall } from './rate-limiter.js';
 import { buildPaymentChallenge, verifyPayment } from './x402.js';
 import { renderLanding, renderResultPage } from './landing.js';
 
@@ -25,6 +25,8 @@ app.use(express.urlencoded({ extended: false, limit: '64kb' }));
 const PORT = process.env.PORT || 3000;
 const FREE_TIER_DAILY = parseInt(process.env.FREE_TIER_DAILY || '3', 10);
 const PAID_PRICE_MIN_UNITS = process.env.PAID_PRICE_MIN_UNITS || '5000';
+
+const VALID_VOICES = ['punchy-founder', 'data-narrator', 'contrarian-curator', 'storyteller'];
 
 // ─────────────────────────────────────────────────────────────
 // Health check
@@ -56,7 +58,7 @@ app.get('/.well-known/x402', (_req, res) => {
       description:
         'YouTube-to-viral-thread generator. Paste a YouTube URL, pick a voice, get a 5-tweet thread + 90s Shorts script.',
       category: 'lifestyle',
-      url: process.env.PUBLIC_URL || `https://${process.env.RENDER_EXTERNAL_URL || 'localhost:' + PORT}`,
+      url: process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`,
     },
     accepts: [
       {
@@ -97,12 +99,23 @@ app.get('/go', rateLimiter, async (req, res) => {
     return res.status(400).send('Invalid YouTube URL. Pass a watch or youtu.be link.');
   }
 
+  if (voice && !VALID_VOICES.includes(voice)) {
+    return res.status(400).json({
+      error: 'invalid_voice',
+      message: `Voice must be one of: ${VALID_VOICES.join(', ')}`,
+      allowed: VALID_VOICES,
+    });
+  }
+
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
   const freeCallsUsed = await getFreeCallsUsed(ip);
 
   if (freeCallsUsed >= FREE_TIER_DAILY) {
     return res.status(402).send('Free tier limit reached (3 calls/day). For unlimited access, use the main form which supports x402 payments.');
   }
+
+  await incrementFreeCall(ip);
+  const freeCallsUsedAfter = freeCallsUsed + 1;
 
   try {
     const result = await generateThread({ url, voice });
@@ -112,8 +125,8 @@ app.get('/go', rateLimiter, async (req, res) => {
         voice,
         url,
         paid: false,
-        freeCallsUsed,
-        freeCallsRemaining: Math.max(0, FREE_TIER_DAILY - freeCallsUsed - 1),
+        freeCallsUsed: freeCallsUsedAfter,
+        freeCallsRemaining: Math.max(0, FREE_TIER_DAILY - freeCallsUsedAfter),
         generatedAt: new Date().toISOString(),
       },
     };
@@ -148,6 +161,14 @@ app.post('/api/thread', rateLimiter, async (req, res) => {
     return res.status(400).json({
       error: 'invalid_url',
       message: 'Pass a YouTube watch URL or youtu.be short link. Audio/podcast URLs coming soon.',
+    });
+  }
+
+  if (voice && !VALID_VOICES.includes(voice)) {
+    return res.status(400).json({
+      error: 'invalid_voice',
+      message: `Voice must be one of: ${VALID_VOICES.join(', ')}`,
+      allowed: VALID_VOICES,
     });
   }
 
@@ -199,6 +220,12 @@ app.post('/api/thread', rateLimiter, async (req, res) => {
 
   // ─── Generate the thread ───
   try {
+    // Increment free-tier counter only for free (non-paid) calls
+    if (!paid) {
+      await incrementFreeCall(ip);
+    }
+    const freeCallsUsedAfter = paid ? freeCallsUsed : freeCallsUsed + 1;
+
     const result = await generateThread({ url, voice });
 
     const responseBody = {
@@ -207,8 +234,8 @@ app.post('/api/thread', rateLimiter, async (req, res) => {
         voice,
         url,
         paid,
-        freeCallsUsed,
-        freeCallsRemaining: Math.max(0, FREE_TIER_DAILY - freeCallsUsed - (paid ? 0 : 1)),
+        freeCallsUsed: freeCallsUsedAfter,
+        freeCallsRemaining: Math.max(0, FREE_TIER_DAILY - freeCallsUsedAfter),
         generatedAt: new Date().toISOString(),
       },
     };
@@ -235,4 +262,11 @@ app.listen(PORT, () => {
   console.log(`✨ VibeCast API listening on port ${PORT}`);
   console.log(`   Free tier: ${FREE_TIER_DAILY} calls/IP/day`);
   console.log(`   Paid: ${PAID_PRICE_MIN_UNITS} min units via x402 on ${process.env.X402_NETWORK || 'eip155:196'}`);
+
+  // Self-ping every 10 min to keep Render free-tier instance warm
+  if (process.env.RENDER_EXTERNAL_URL) {
+    setInterval(() => {
+      fetch(process.env.RENDER_EXTERNAL_URL + '/health').catch(() => {});
+    }, 10 * 60 * 1000);
+  }
 });
