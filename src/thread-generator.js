@@ -10,15 +10,36 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 // Hard fallback when OPENAI_API_KEY is missing — uses a deterministic template.
 // Lets you ship and demo even before keys are wired up.
-function fallbackThread({ url, voice, transcript, videoMeta }) {
+function fallbackThread({ url, voice, transcript, videoMeta, transcriptStrategy }) {
   const title = videoMeta?.title || 'this video';
-  const tweets = [
-    `1/ Just watched "${title}" — here's what stuck with me 🧵`,
-    `2/ The single biggest idea: the source content has a clear point of view that the summary can preserve.`,
-    `3/ Most people miss this because they're skimming. The video's value is in the specifics.`,
-    `4/ If you're building anything around this topic, the takeaway is: don't paraphrase — preserve the original framing.`,
-    `5/ Full breakdown + the part everyone skipped 👇\n\n#VibeCast`,
-  ];
+  const author = videoMeta?.author && videoMeta.author !== 'Unknown channel' ? videoMeta.author : null;
+  const hasRealTranscript = transcriptStrategy === 'youtube-transcript' || transcriptStrategy === 'timedtext-direct';
+
+  let tweets;
+  if (hasRealTranscript) {
+    tweets = [
+      `1/ Just watched "${title}" — here's what stuck with me 🧵`,
+      `2/ The single biggest idea: the source content has a clear point of view that the summary can preserve.`,
+      `3/ Most people miss this because they're skimming. The video's value is in the specifics.`,
+      `4/ If you're building anything around this topic, the takeaway is: don't paraphrase — preserve the original framing.`,
+      `5/ Full breakdown + the part everyone skipped 👇\n\n#VibeCast`,
+    ];
+  } else {
+    // Metadata-fallback: we couldn't fetch the transcript (rate limit) so
+    // generate a "topic intro" thread that hooks people into watching.
+    const looksGeneric = !title || title.startsWith('YouTube video');
+    const authorTag = author ? ` by ${author}` : '';
+    const header = looksGeneric
+      ? `1/ Found a video worth your time 🧵`
+      : `1/ "${title}"${authorTag} is one of those videos people will be quoting all week 🧵`;
+    tweets = [
+      header,
+      `2/ If you haven't seen it yet, here's why it's worth your time ⤵️`,
+      `3/ The hook is sharper than 90% of content in this space — it earns the watch in the first 30 seconds.`,
+      `4/ The middle is where the real value is. Most threads will skip it. Watch it yourself.`,
+      `5/ Full thread + a 90s Shorts script coming. For now: go watch the video 👇\n\n#VibeCast`,
+    ];
+  }
 
   const shorts = `[HOOK — first 3 seconds]
 "Three things from ${title} you'll want to remember."
@@ -74,11 +95,11 @@ async function callOpenAI({ systemPrompt, userPrompt }) {
 
 export async function generateThread({ url, voice = 'punchy-founder' }) {
   // 1. Fetch the YouTube transcript + minimal video metadata
-  const { transcript, videoMeta } = await fetchTranscript(url);
+  const { transcript, videoMeta, transcriptStrategy } = await fetchTranscript(url);
 
   // 2. If no LLM key, use fallback (lets you ship a demo immediately)
   if (!OPENAI_API_KEY) {
-    return fallbackThread({ url, voice, transcript, videoMeta });
+    return fallbackThread({ url, voice, transcript, videoMeta, transcriptStrategy });
   }
 
   // 3. Build the prompt
