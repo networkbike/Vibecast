@@ -11,7 +11,7 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 // Hard fallback when OPENAI_API_KEY is missing — uses a deterministic template.
 // Lets you ship and demo even before keys are wired up.
 function fallbackThread({ url, voice, transcript, videoMeta, transcriptStrategy }) {
-  const title = videoMeta?.title || 'this video';
+  const title = videoMeta?.title && !videoMeta.title.startsWith('YouTube video') ? videoMeta.title : 'this video';
   const author = videoMeta?.author && videoMeta.author !== 'Unknown channel' ? videoMeta.author : null;
   const description = videoMeta?.description || '';
   const hasRealTranscript = transcriptStrategy === 'youtube-transcript' || transcriptStrategy === 'timedtext-direct' || transcriptStrategy === 'supadata';
@@ -22,8 +22,9 @@ function fallbackThread({ url, voice, transcript, videoMeta, transcriptStrategy 
 
   let tweets;
   if (hasRealTranscript) {
+    const titleForTweet = (title && !title.startsWith('YouTube video')) ? `"${title}"` : 'this video';
     tweets = [
-      `1/ Just watched "${title}" — here's what stuck with me 🧵`,
+      `1/ Just watched ${titleForTweet} — here's what stuck with me 🧵`,
       `2/ The single biggest idea: the source content has a clear point of view that the summary can preserve.`,
       `3/ Most people miss this because they're skimming. The video's value is in the specifics.`,
       `4/ If you're building anything around this topic, the takeaway is: don't paraphrase — preserve the original framing.`,
