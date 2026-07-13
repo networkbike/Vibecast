@@ -10,7 +10,7 @@
 
 import { YoutubeTranscript } from 'youtube-transcript';
 
-const YT_PROXY_URL = process.env.YT_PROXY_URL; // e.g. https://vibecast-yt-proxy.onrender.com
+const YT_PROXY_URL = process.env.YT_PROXY_URL || 'https://vibecast-yt-proxy.onrender.com'; // fallback if env not set
 
 // A small set of realistic User-Agents. Rotating helps avoid per-UA throttles.
 const USER_AGENTS = [
