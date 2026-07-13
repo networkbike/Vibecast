@@ -15,11 +15,12 @@ import 'dotenv/config';
 import { generateThread } from './thread-generator.js';
 import { rateLimiter, getFreeCallsUsed } from './rate-limiter.js';
 import { buildPaymentChallenge, verifyPayment } from './x402.js';
-import { renderLanding } from './landing.js';
+import { renderLanding, renderResultPage } from './landing.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '64kb' }));
+app.use(express.urlencoded({ extended: false, limit: '64kb' }));
 
 const PORT = process.env.PORT || 3000;
 const FREE_TIER_DAILY = parseInt(process.env.FREE_TIER_DAILY || '3', 10);
@@ -80,7 +81,7 @@ app.get('/', (_req, res) => {
 //   PAYMENT-SIGNATURE: <signature>
 // ─────────────────────────────────────────────────────────────
 app.post('/api/thread', rateLimiter, async (req, res) => {
-  const { url, voice = 'punchy-founder' } = req.body || {};
+  const { url, voice = 'punchy-founder', format = 'json' } = req.body || {};
 
   if (!url || typeof url !== 'string') {
     return res.status(400).json({
@@ -148,7 +149,7 @@ app.post('/api/thread', rateLimiter, async (req, res) => {
   try {
     const result = await generateThread({ url, voice });
 
-    return res.status(200).json({
+    const responseBody = {
       ...result,
       meta: {
         voice,
@@ -158,7 +159,14 @@ app.post('/api/thread', rateLimiter, async (req, res) => {
         freeCallsRemaining: Math.max(0, FREE_TIER_DAILY - freeCallsUsed - (paid ? 0 : 1)),
         generatedAt: new Date().toISOString(),
       },
-    });
+    };
+
+    // No-JS fallback: render as a standalone HTML page
+    if (format === 'html') {
+      return res.status(200).send(renderResultPage(responseBody));
+    }
+
+    return res.status(200).json(responseBody);
   } catch (err) {
     console.error('Thread generation failed:', err);
     return res.status(500).json({
