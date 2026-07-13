@@ -118,29 +118,60 @@ export async function fetchTranscript(url) {
   // Strategy 1: Supadata API (best — handles YouTube scraping on their own IPs)
   if (SUPADATA_API_KEY) {
     try {
-      const res = await fetch(
-        `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}`,
+      // Try English first, fall back to no-lang param if that fails
+      let res = await fetch(
+        `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&lang=en`,
         {
           headers: { 'x-api-key': SUPADATA_API_KEY },
           signal: AbortSignal.timeout(15000),
         }
       );
+      if (!res.ok) {
+        // Fallback: try without lang
+        res = await fetch(
+          `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}`,
+          {
+            headers: { 'x-api-key': SUPADATA_API_KEY },
+            signal: AbortSignal.timeout(15000),
+          }
+        );
+      }
       if (res.ok) {
-        const data = await res.json();
-        if (data.content) {
-          // Supadata returns either { content: "...", ... } or { transcript: [{text, ...}] }
+        const rawText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          // Some Supadata responses are just plain text
+          transcript = rawText.replace(/\s+/g, ' ').trim();
+          data = null;
+        }
+        if (data) {
+          // Supadata returns either:
+          //   { content: "string", lang: "en" }  -- plain text
+          //   { transcript: [{ text, offset, duration, lang }] }  -- segments
+          //   [{ text, offset, duration, lang }]  -- array
           if (typeof data.content === 'string') {
             transcript = data.content;
           } else if (Array.isArray(data.transcript)) {
-            transcript = data.transcript.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim();
+            transcript = data.transcript
+              .map(s => (typeof s === 'string' ? s : s.text || ''))
+              .filter(Boolean)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim();
           } else if (Array.isArray(data)) {
-            transcript = data.map(s => s.text || s).join(' ').replace(/\s+/g, ' ').trim();
+            transcript = data
+              .map(s => (typeof s === 'string' ? s : s.text || ''))
+              .filter(Boolean)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim();
           }
-          if (transcript && transcript.length >= 50) {
-            usedStrategy = 'supadata';
-            // Also fetch metadata in parallel
-            videoMeta = await fetchVideoMetadata(videoId);
-          }
+        }
+        if (transcript && transcript.length >= 50) {
+          usedStrategy = 'supadata';
+          videoMeta = await fetchVideoMetadata(videoId);
         }
       } else {
         const errText = await res.text();
