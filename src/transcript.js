@@ -1,16 +1,20 @@
-// YouTube transcript fetcher — hardened against rate-limits
+// YouTube data fetcher — uses the official YouTube Data API v3
 //
-// Tries multiple strategies in order:
-//   1. Proxy (YT_PROXY_URL) — routes to a different IP, bypasses Render's block
-//   2. youtube-transcript npm package directly (works on some IPs, not Render)
-//   3. Direct timedtext fetch with rotating User-Agent + cookie strategy
-//   4. Fallback: extract video title from page HTML + use it for context
+// Strategy 1: YouTube Data API for video metadata (title, description, channel, tags)
+//             1 quota unit per call. Free tier is 10,000 units/day. Bypasses
+//             the public YouTube scraping rate limits because googleapis.com
+//             uses a different IP pool than youtube.com.
 //
-// For the hackathon, strategy 1 (proxy) is the production path.
+// Strategy 2: youtube-transcript npm package (works on some IPs, fails on shared Render IPs)
+//
+// Strategy 3: Direct timedtext fetch (rare to work)
+//
+// Strategy 4: Metadata fallback (graceful degradation when nothing works)
 
 import { YoutubeTranscript } from 'youtube-transcript';
 
-const YT_PROXY_URL = process.env.YT_PROXY_URL || 'https://vibecast-yt-proxy.onrender.com'; // fallback if env not set
+const YT_API_KEY = process.env.YT_API_KEY;
+const YT_PROXY_URL = process.env.YT_PROXY_URL; // legacy — kept for backward compat
 
 // A small set of realistic User-Agents. Rotating helps avoid per-UA throttles.
 const USER_AGENTS = [
@@ -35,7 +39,50 @@ function extractVideoId(url) {
   return null;
 }
 
-// Strategy 3 fallback: get the video title + channel from the public YouTube page
+// Strategy 1: YouTube Data API v3 — fetch video metadata
+// Returns: { title, description, channelTitle, channelId, tags, defaultAudioLanguage, ... }
+async function fetchYouTubeDataApi(videoId) {
+  if (!YT_API_KEY) return null;
+
+  try {
+    const params = new URLSearchParams({
+      id: videoId,
+      part: 'snippet,contentDetails,statistics',
+      key: YT_API_KEY,
+      maxResults: '1',
+    });
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?${params}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!res.ok) {
+      console.error('YouTube Data API error:', res.status);
+      return null;
+    }
+    const data = await res.json();
+    const item = data.items?.[0];
+    if (!item) return null;
+
+    return {
+      id: videoId,
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      title: item.snippet?.title || `YouTube video ${videoId}`,
+      author: item.snippet?.channelTitle || 'Unknown channel',
+      description: item.snippet?.description || '',
+      tags: item.snippet?.tags || [],
+      categoryId: item.snippet?.categoryId,
+      publishedAt: item.snippet?.publishedAt,
+      duration: item.contentDetails?.duration,
+      viewCount: item.statistics?.viewCount,
+      likeCount: item.statistics?.likeCount,
+    };
+  } catch (err) {
+    console.error('YouTube Data API fetch failed:', err.message);
+    return null;
+  }
+}
+
+// Legacy metadata fetcher (used by older fallback paths)
 async function fetchVideoMetadata(videoId) {
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
@@ -67,20 +114,32 @@ export async function fetchTranscript(url) {
     throw new Error('Could not extract YouTube video ID from URL');
   }
 
-  const videoMeta = await fetchVideoMetadata(videoId);
-  const meta = videoMeta || {
-    id: videoId,
-    url: `https://www.youtube.com/watch?v=${videoId}`,
-    title: `YouTube video ${videoId}`,
-    author: 'Unknown channel',
-  };
-
-  // Strategy 1: external proxy (recommended — bypasses Render's rate-limited IP)
+  let videoMeta = null;
   let transcript = '';
   let usedStrategy = null;
-  let lastError = null;
 
-  if (YT_PROXY_URL) {
+  // Strategy 1: YouTube Data API (best — reliable, official, no scraping)
+  if (YT_API_KEY) {
+    const apiData = await fetchYouTubeDataApi(videoId);
+    if (apiData) {
+      videoMeta = apiData;
+      // Build a "transcript" from description + tags + title for the LLM
+      const parts = [];
+      parts.push(`Title: ${apiData.title}`);
+      parts.push(`Channel: ${apiData.author}`);
+      if (apiData.description && apiData.description.length > 50) {
+        parts.push(`\nDescription:\n${apiData.description.slice(0, 3000)}`);
+      }
+      if (apiData.tags && apiData.tags.length > 0) {
+        parts.push(`\nTags: ${apiData.tags.slice(0, 20).join(', ')}`);
+      }
+      transcript = parts.join('\n');
+      usedStrategy = 'youtube-data-api';
+    }
+  }
+
+  // Strategy 2: External proxy (kept for backward compat with the previous deploy)
+  if (!usedStrategy && YT_PROXY_URL) {
     try {
       const proxyRes = await fetch(`${YT_PROXY_URL}/transcript?id=${videoId}`, {
         signal: AbortSignal.timeout(15000),
@@ -90,31 +149,34 @@ export async function fetchTranscript(url) {
         if (proxyData.transcript && proxyData.transcript.length >= 50) {
           transcript = proxyData.transcript;
           usedStrategy = 'proxy';
+          if (!videoMeta) {
+            // Get metadata from proxy or fallback
+            videoMeta = await fetchVideoMetadata(videoId);
+          }
         }
-      } else {
-        lastError = new Error(`Proxy returned ${proxyRes.status}`);
       }
     } catch (err) {
-      lastError = err;
-      // Continue to strategy 2
+      console.error('Proxy fetch failed:', err.message);
     }
   }
 
-  // Strategy 2: youtube-transcript npm (works on some IPs)
+  // Strategy 3: Direct youtube-transcript npm (may fail on Render's IP)
   if (!usedStrategy) {
     try {
       const segments = await YoutubeTranscript.fetchTranscript(videoId);
       transcript = segments.map((s) => s.text).join(' ').replace(/\s+/g, ' ').trim();
       if (transcript && transcript.length >= 50) {
         usedStrategy = 'youtube-transcript';
+        if (!videoMeta) {
+          videoMeta = await fetchVideoMetadata(videoId);
+        }
       }
     } catch (err) {
-      lastError = err;
-      // Continue to strategy 3
+      console.error('youtube-transcript failed:', err.message);
     }
   }
 
-  // Strategy 3: direct timedtext fetch (rare to work but worth trying)
+  // Strategy 4: Direct timedtext fetch
   if (!usedStrategy) {
     try {
       const res = await fetch(
@@ -127,30 +189,40 @@ export async function fetchTranscript(url) {
           transcript = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
           if (transcript.length >= 50) {
             usedStrategy = 'timedtext-direct';
+            if (!videoMeta) {
+              videoMeta = await fetchVideoMetadata(videoId);
+            }
           }
         }
       }
     } catch (err) {
-      lastError = err;
+      console.error('timedtext failed:', err.message);
     }
   }
 
-  // Strategy 4: build a meaningful "transcript" from the video metadata.
-  // The LLM can use this to generate a thread about the video's title/topic.
+  // Strategy 5: Final fallback — generic template based on whatever metadata we have
   if (!usedStrategy) {
-    const title = meta.title;
-    const author = meta.author;
+    if (!videoMeta) {
+      videoMeta = {
+        id: videoId,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        title: `YouTube video ${videoId}`,
+        author: 'Unknown channel',
+      };
+    }
+    const title = videoMeta.title;
+    const author = videoMeta.author;
     transcript = `Video titled "${title}" by ${author}. ` +
       `Title suggests the video is about: ${title.replace(/[^\w\s]/g, ' ')}. ` +
-      `(Full transcript unavailable — YouTube rate-limited our IP. ` +
-      `Generate a thread that introduces the topic and the creator, with hooks ` +
-      `that would make someone click through to watch.)`;
+      `(Could not fetch full transcript or description — generate a thread that ` +
+      `introduces the topic and the creator, with hooks that would make someone ` +
+      `click through to watch.)`;
     usedStrategy = 'metadata-fallback';
   }
 
   return {
     transcript,
-    videoMeta: meta,
+    videoMeta,
     transcriptStrategy: usedStrategy,
   };
 }
