@@ -19,6 +19,8 @@ services:
         value: eip155:196
       - key: YT_PROXY_URL
         value: https://vibecast-yt-proxy.onrender.com
+      - key: YT_API_KEY
+        sync: false
       - key: OPENAI_MODEL
         value: gpt-4o-mini
       - key: OPENAI_BASE_URL
