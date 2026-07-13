@@ -17,6 +17,8 @@ services:
         value: 0x779ded0c9e1022225f8e0630b35a9b54be713736
       - key: X402_NETWORK
         value: eip155:196
+      - key: YT_PROXY_URL
+        sync: false
       - key: OPENAI_MODEL
         value: gpt-4o-mini
       - key: OPENAI_BASE_URL
