@@ -13,6 +13,13 @@
 const EIP712_DOMAIN_NAME = 'USD₮0';
 const EIP712_DOMAIN_VERSION = '1';
 
+// Official USDT0 contract on X Layer (mainnet, chain 196).
+// Used as a fallback when USDT0_TOKEN_ADDRESS env var is not set,
+// so the 402 challenge always carries the token contract address
+// the buyer's wallet needs to sign against.
+const DEFAULT_USDT0_ADDRESS = '0x779ded0c9e1022225f8e0630b35a9b54be713736';
+const DEFAULT_X402_NETWORK = 'eip155:196';
+
 // ─── Build a 402 challenge ───
 export function buildPaymentChallenge({
   amount,
@@ -22,6 +29,11 @@ export function buildPaymentChallenge({
   resource,
   description,
 }) {
+  // Resolve asset + network with fallbacks so the 402 body is always
+  // spec-compliant even when env vars are missing.
+  const resolvedAsset = asset || process.env.USDT0_TOKEN_ADDRESS || DEFAULT_USDT0_ADDRESS;
+  const resolvedNetwork = network || process.env.X402_NETWORK || DEFAULT_X402_NETWORK;
+
   return {
     x402Version: 2,
     resource: {
@@ -32,8 +44,8 @@ export function buildPaymentChallenge({
     accepts: [
       {
         scheme: 'exact',
-        network,
-        asset,
+        network: resolvedNetwork,
+        asset: resolvedAsset,
         amount, // min units (6 decimals for USDT0)
         payTo,
         maxTimeoutSeconds: 300,
@@ -83,8 +95,11 @@ export async function verifyPayment(paymentHeader, { amount, payTo }) {
   if (decoded.x402Version !== 2) {
     throw new Error(`Unsupported x402 version: ${decoded.x402Version}`);
   }
-  if (decoded.scheme !== 'exact') {
-    throw new Error(`Unsupported payment scheme: ${decoded.scheme}`);
+  // Defensive: v2 payloads may carry the scheme at the top level OR
+  // nested under `accepted`. Support both for forward-compat.
+  const scheme = decoded.accepted?.scheme || decoded.scheme;
+  if (scheme !== 'exact') {
+    throw new Error(`Unsupported payment scheme: ${scheme}`);
   }
   if (!decoded.payload?.authorization || !decoded.payload?.signature) {
     throw new Error('Payment payload missing authorization or signature');
